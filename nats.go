@@ -822,6 +822,18 @@ func UserCredentials(userOrChainedFile string, seedFiles ...string) Option {
 	return UserJWT(userCB, sigCB)
 }
 
+// UserCredentialsFromString is a convenience function that takes a filename
+// for a user's JWT and a filename for the user's private Nkey seed.
+func UserCredentialsFromString(creds string) Option {
+	userCB := func() (string, error) {
+		return jwt.ParseDecoratedJWT([]byte(creds))
+	}
+	sigCB := func(nonce []byte) ([]byte, error) {
+		return sigHandlerFromString(nonce, creds)
+	}
+	return UserJWT(userCB, sigCB)
+}
+
 // UserJWT will set the callbacks to retrieve the user's JWT and
 // the signature callback to sign the server nonce. This an the Nkey
 // option are mutually exclusive.
@@ -4127,6 +4139,20 @@ func nkeyPairFromSeedFile(seedFile string) (nkeys.KeyPair, error) {
 // Do not keep private seed in memory.
 func sigHandler(nonce []byte, seedFile string) ([]byte, error) {
 	kp, err := nkeyPairFromSeedFile(seedFile)
+	if err != nil {
+		return nil, err
+	}
+	// Wipe our key on exit.
+	defer kp.Wipe()
+
+	sig, _ := kp.Sign(nonce)
+	return sig, nil
+}
+
+// Sign authentication challenges from the server.
+// Do not keep private seed in memory.
+func sigHandlerFromString(nonce []byte, creds string) ([]byte, error) {
+	kp, err := jwt.ParseDecoratedNKey([]byte(creds))
 	if err != nil {
 		return nil, err
 	}
